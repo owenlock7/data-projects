@@ -61,15 +61,19 @@ rm(list = ls())
 fund.names <- c("Fidelity Emerging Markets", "Future of Defence", "Invesco Bloomberg Commodity", "MSCI World ETF", 
                 "MSCI Min Vol ETF", "MSCI World Value", "iShares Gold")
 tickers <- c("0P00011YDA.L", "NATO.L", "CMOP.L", "SWDA.L", "WMVG.L", "IWFV.L", "SGLN.L")
-start.amount <- c(549.71, 2369.89, 2004.51, 9077.07, 1976.17, 2153.54, 30002.04)
+amount.A <- c(549.71, 2369.89, 2004.51, 9077.07, 1976.17, 2153.54, 3002.04)
+amount.B <- c(0, 2010.41, 0, 6063.66, 0, 0, 4160.68)
+combined.amounts <- amount.A + amount.B
 currency <- c("usd", "gbp", "gbp", "gbp", "gbp", "gbp", "gbp")
 usd.fund <- "0P00011YDA.L"
 
 ```
 
-# Sorting out data
+# Data Preparation
 
-```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+
+```{r echo = FALSE, warning = FALSE, message = FALSE, include = FALSE}
 
 start.date <- "2023-08-01"
 
@@ -110,9 +114,69 @@ monthly.prices <- lapply(monthly.prices, function(x) {
 ## Remove the currency Index
 monthly.prices$gbpusd = NULL
 
+```
+
+# Correlation Analysis 
+
+```{r echo = FALSE}
+
+# 1) Compute monthly log‐returns for each series
+ret_list <- lapply(monthly.prices, function(x) {
+  # diff(log(x)) gives log returns; drop the first NA row
+  re <- diff(log(x))
+  na.omit(re)
+})
+
+# 2) Merge them into one xts object
+all.rets <- do.call(merge, ret_list)
+colnames(all.rets) <- names(ret_list)
+
+# 3) Correlation matrix (pairwise complete cases)
+cor_mat <- cor(all.rets, use = "pairwise.complete.obs")
+
+corrplot(cor_mat,
+         method = "color",        # colored squares
+         type   = "upper",        # only show upper triangle
+         addCoef.col = "black",   # add correlation coefficients
+         tl.col = "darkblue",     # variable names in dark blue
+         tl.srt = 45,             # rotate labels for readability
+         diag = FALSE             # hide diagonal
+)
 
 ```
 
+# Account Composition
+
+```{r echo = FALSE}
+
+df <- data.frame(
+  fund   = fund.names,
+  amount = combined.amounts,
+  stringsAsFactors = FALSE
+)
+
+# 2) compute percentages and label positions
+df <- df %>%
+  arrange(desc(amount)) %>%
+  mutate(
+    pct  = amount / sum(amount) * 100,
+    lbl  = sprintf("%s\n%.1f%%", fund, pct),
+    ypos = cumsum(pct) - 0.5 * pct
+  )
+
+# 3) make the pie chart with ggplot2
+ggplot(df, aes(x = "", y = pct, fill = fund)) +
+  geom_col(width = 1, color = "white") +           # white borders between slices
+  coord_polar(theta = "y") +                       # convert bar to pie# labels in the middle of slices
+  theme_void() +                                    # remove axes, grid, background
+  labs(title = "Current Portfolio Composition",
+       fill  = "Fund") +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold"),
+    legend.position = "right"
+  )
+
+```
 
 
 
