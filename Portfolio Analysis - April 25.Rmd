@@ -1,0 +1,758 @@
+---
+title: "Portfolio Analysis - Core Fund - April 2025"
+author: "Financial Analysis"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    theme: cosmo
+    highlight: tango
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                     fig.width = 10, fig.height = 6)
+```
+
+# Introduction
+
+This document presents a comprehensive analysis of a revised proposed portfolio - our **Core Fund** - intended to protect against currency debasement risks, while maintaining sufficient exposure to the broad equity market to capture upside returns. The AJ Bell platform will be used to manage this portfolio. Around 90% of our assets will be managed through this fund. 
+
+Alongside this, we will run a much smaller high risk fund - our **Venture Fund** - which will focus on investing in individual companies and cryptoassets. This will account for around 10% of assets under management. 
+
+# The Core Fund
+
+The individual funds to be included in the *Core Fund* portfolio are as follows:
+
+* **iShares Physical Gold ETC**: A [fund](https://www.ishares.com/uk/individual/en/products/258441/ishares-physical-gold-etc-fund?switchLocale=y&siteEntryPassthrough=true) which closely tracks the London Bullion Market Association (LBMA) Gold Price - the most widely used benchmark for daily gold prices. It's base currency is USD. The fund was launched on the 8th April 2011. It's ticker is SGLN (SGLN.L on Yahoo Finance). Indicative Fund Share - 15%.
+* **iShares Core MSCI World UCITS ETF**: The broad equity component of our portfolio. This fund provides exposure to a wide range of equities across 23 developed countries. As of March 2025, US equities accounted for 71% of the portfolio. The investor documentation can be found [here](https://www.ishares.com/uk/individual/en/products/287737/ishares-core-msci-world-ucits-etf). The fund was launched on the 22nd May 2017. It is GBP hedged. It's ticker is IWDG (IWDG.L on Yahoo Finance). Indicative Fund Share - 40%. 
+* **iShares Edge MSCI World Value Factor UCITS ETF**: Provides exposure to a subset of MSCI world stocks that are undervalued relative to their fundamentals. As of April 2025, 38% of the fund is invested in US stocks, 21% in Japanese stocks, and around 10% in UK stocks. There is not a particularly strong skew towards defensive sectors - Information Technology remains the number one sector at 23%. The ticker is IWVL (IWVL.L on Yahoo Finance). It is USD denominated, so comes with currency risk. The investor documentation can be found [here](https://www.ishares.com/uk/individual/en/products/270048/ishares-msci-world-value-factor-ucits-etf). Indicative Fund Share - 10%.
+* **iShares Edge MSCI World Minimum Volatility UCITS ETF**: Shares in a set of companies from developed countries that have lower volatility characteristics. There is subsequently a skew towards consumer staples, industrials and utilities, though cyclical sectors such as information technology retain a high share. The fund was launched on 30th November 2012. I high percentage (around 70% of AUM is invested in US-listed companies). The investor documentation can be found [here](https://www.ishares.com/uk/individual/en/products/251382/ishares-msci-world-minimum-volatility-ucits-etf). The fund is USD denominated, and therefore comes with currency risk. Indicative Fund Share - 10%. Yahoo Finance ticker MVOL.L. 
+* **iShares MSCI Emerging Markets ex China ETF**: USD denominated, and therefore carries currency risk. The fund looks to gain exposure to large and mid cap companies in emerging markets (excluding China, where as UK citizens we are worried about property rights). It has large holdings in Information Technology (over 30%), including a significant TSMC holding (14%). Launched in July 2017. The investor documentation can be found [here](https://www.ishares.com/us/products/288504/ishares-msci-emerging-markets-ex-china-etf). The Yahoo Finance ticker is EMXC. Indicative Fund Share - 5%. 
+* **Future of Defence UCITS ETF**. The stock ticker is NATP.L on Yahoo Finance. It has a relatively recent inception date in 2023. It is GBP denominated. The fund has broad cross-country exposure - with the US the largest share. It provides exposure to companies generating revenues from NATO defense and cyber-defense spending. We will use Invesco Aerospace and Defence ETF (Yahoo Finance ticker PPA) as an imperfect proxy with a longer backrun for portfolio analysis. Indicative allocation - 10%. Investment documentation [here](https://hanetf.com/fund/nato-future-of-defence-etf/#tab-id-1). 
+* **Invesco Bloomberg Commodity UCITS ETF**: Yahoo Finance ticker - CMOP.L. Comprised of futures contracts on physical commodities. 24 commodities are eligible for inclusion across energy, grains, industrial metals and livestock. The fund has an inception date in 2018. Indicative Fund Share - 10%. Investor documentation [here](https://www.hl.co.uk/shares/shares-search-results/i/invesco-bloomberg-commodity-ucits-etf-gbp). 
+
+*Potential future candidate fund*
+
+* **iShares Global Inflation Linked Govt Bond UCITS ETF**: Yahoo Finance ticker IGIL.L. Provides diversified exposure to investment grade inflation-linked government bonds. The largest shares are US and UK inflation-linked government bonds. Fund documentation [here](https://www.ishares.com/uk/individual/en/products/251746/ishares-global-inflation-linked-government-bond-ucits-etf). The fund shares are USD denominated, and so come with currency risk. The inception date in August 2008. Indicative Fund Share - 0% (until returns are adequately understood by us). 
+
+```{r }
+
+# Load required libraries
+library(quantmod)
+library(PerformanceAnalytics)
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(reshape2)
+library(scales)
+library(gridExtra)
+library(zoo)  # For rolling calculations
+library(magrittr)
+library(xts)
+library(knitr)
+library(kableExtra)
+library(RColorBrewer)
+library(corrplot)
+
+# Set theme for consistent visualization
+theme_set(theme_minimal() + 
+          theme(plot.title = element_text(face = "bold"),
+                plot.subtitle = element_text(face = "italic"),
+                legend.position = "bottom"))
+
+```
+
+## Visualisation of Portfolio Composition
+
+```{r }
+
+# Define the portfolio allocation
+ticker_names <- c("Physical Gold", "Core MSCI World", "MSCI World Value Factor", "MSCI World Minimum Volatility",
+                  "MSCI Emerging Markets ex China", "Future of Defence", "Bloomberg Commodity")
+tickers <- c("SGLN.L", "IWDG.L", "IWVL.L", "MVOL.L", "EMXC", "NATP.L", "CMOP.L")
+
+portfolio_allocation <- tibble(
+  Fund = ticker_names,
+  Ticker = tickers,
+  Allocation = c(0.15, 0.40, 0.1, 0.1, 0.05, 0.1, 0.1) # Update these in future months as appropriate. 
+)
+
+# Create a pie chart of allocations
+ggplot(portfolio_allocation, aes(x = "", y = Allocation, fill = Fund)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  labs(title = "Core Fund Portfolio Allocation",
+       subtitle = "April 2025 - Initial Investment Proposal Allocation",
+       fill = "Investment Fund") +
+  scale_fill_brewer(palette = "Set2") +
+  scale_y_continuous(labels = percent_format()) +
+  theme_minimal() +
+  theme(axis.title = element_blank(),
+        axis.text = element_blank(),
+        panel.grid = element_blank(),
+        plot.title = element_text(hjust = 0.5, face = "bold"),
+        plot.subtitle = element_text(hjust = 0.5))
+```
+
+# Theory behind The Core Fund Composition
+
+[**To be completed**]
+
+# Important Fund Considerations
+
+## Using Simple or Log Returns for Portfolio Analysis
+
+In this analysis we will work with **log returns** for all statistical computations, and convert back to simple (arithmetic) returns only when reporting or interpreting performance.
+
+### Definitions
+
+Let \(P_t\) be the price (or index level) at the end of month \(t\). We define:
+
+- **Log return**  
+  \[
+    r_t = \ln\!\bigl(\tfrac{P_t}{P_{t-1}}\bigr)
+  \]
+- **Re‐conversion to simple return**  
+  \[
+    R_t = \exp(r_t) - 1
+  \]
+
+### Justification for Log Returns
+
+1. **Time additivity**  
+   
+   \[
+     r_{1\to T} \;=\; \sum_{t=2}^T r_t
+     \quad\Longleftrightarrow\quad
+     R_{1\to T} \;=\; \exp\!\Bigl(\sum_{t=2}^T r_t\Bigr)\;-\;1
+   \]
+   
+   This means multi‐period compounding reduces to a simple sum of \(r_t\).
+
+2. **Statistical properties** 
+
+   - Log returns are often **closer to Normally distributed** (smaller skewness, lower excess kurtosis), which makes:
+     - **Estimation** of means and variances more reliable.
+     - **Modeling** (e.g. GARCH, factor models) directly applicable under Gaussian assumptions.
+
+3. **Portfolio aggregation**  
+   
+   A portfolio log return is simply the weighted sum of individual asset log returns:
+   \[
+     r_{p,t} = \sum_{i=1}^N w_i\,r_{i,t},
+     \quad \sum_i w_i = 1
+   \]
+   
+   No need for iterative compounding each period.
+
+4. **Large‐move symmetry**  
+   
+   For large price swings, \(\ln\)-returns treat gains and losses symmetrically (no upper‐bound bias).
+
+# Analysis of Core Fund Components
+
+This section... [**To be completed**]
+
+## Fund Prices Across Time
+
+### Choice to use Adjusted Closing Prices
+
+Adjusted closing prices incorporate dividends, rights issues, stock splits and other corporate actions into a single, continuous price series, ensuring that return calculations truly reflect the value changes experienced by investors. Without these adjustments, raw closing prices would show artificial jumps or drops on ex‑dividend or split dates, distorting measures of performance, volatility and correlation. By using adjusted prices, all dividends and distributions are effectively reinvested in the series, yielding total‑return log‑returns that are comparable across time and across securities. This consistency is essential for accurate performance attribution, portfolio optimisation and risk analysis, and it guarantees that backtests and historical studies align with the real economic experience of holding the assets.
+
+### Visualisation of Price Time Series
+
+In our portfolio analysis, we will use monthly returns. 
+
+```{r message = FALSE, fig.height=18, fig.width=10}
+
+# Assign start and end dates
+end_date <- Sys.Date()
+start_date <- as.Date("2020-01-01")
+
+# Create empty list to store price data
+price_data <- list()
+
+# Download data for each ticker
+for (i in 1:length(tickers)) {
+  ticker <- tickers[i]
+  
+ # Try to download data, with error handling
+  tryCatch({
+    getSymbols(ticker, src = "yahoo",
+               # from = start_date,
+               # to = end_date,
+               auto.assign = FALSE) -> price_data[[ticker]]
+
+  #   cat(paste("Successfully downloaded data for", ticker, "\n"))
+  # }, error = function(e) {
+  #   cat(paste("Error downloading data for", ticker, ":", e$message, "\n"))
+  })
+}
+
+# Function to extract closing prices and filter to month-end
+get_monthly_prices <- function(price_series, ticker) {
+  # Extract adjusted closing prices
+  closing_prices <- Ad(price_series)
+  
+  # Convert to data frame for easier manipulation
+  df <- data.frame(Date = index(closing_prices),
+                   Price = as.numeric(closing_prices),
+                   stringsAsFactors = FALSE)
+  
+  # Convert Date column to Date format
+  df$Date <- as.Date(df$Date)
+  
+  # Extract year and month
+  df$Year <- year(df$Date)
+  df$Month <- month(df$Date)
+  
+  # Group by year and month, then get the last trading day of each month
+  monthly_data <- df %>%
+    group_by(Year, Month) %>%
+    filter(Date == max(Date)) %>%
+    ungroup()
+  
+  # Clean up the data frame
+  monthly_data <- monthly_data %>%
+    select(Date, Price) %>%
+    mutate(Ticker = ticker)
+  
+  return(monthly_data)
+}
+
+# Apply function to each ticker
+monthly_prices <- list()
+for (ticker in names(price_data)) {
+  monthly_prices[[ticker]] <- get_monthly_prices(price_data[[ticker]], ticker)
+}
+
+# Combine all monthly prices into one data frame
+all_monthly_prices <- bind_rows(monthly_prices)
+
+# The final date of the trading month is not always consistent, so we need to align these.
+all_monthly_prices %<>%
+  mutate(Date = as.Date(format(Date, "%Y-%m-01")) + months(1) - 1)
+
+# Create mapping for prettier names
+name_mapping <- setNames(ticker_names, tickers)
+
+# Add fund names
+all_monthly_prices$Fund <- name_mapping[all_monthly_prices$Ticker]
+
+# Check for NA's in the data
+NA_values <- all_monthly_prices %>%
+  dplyr:: filter(is.na(Price)) ## good, there are no NA values
+rm(NA_values)
+
+# Plot each fund's monthly price series
+ggplot(all_monthly_prices, aes(x = Date, y = Price, color = Fund)) +
+  geom_line(linewidth = 1) +
+  facet_wrap(~Fund, scales = "free_y", ncol = 1) +
+  labs(title = "Monthly Share Prices",
+       subtitle = "End-of-month prices for each fund",
+       x = "Date",
+       y = "Price",
+       color = "Fund") +
+  scale_x_date(date_labels = "%Y", date_breaks = "3 years") +
+  scale_y_continuous(labels = function(x) format(x, scientific = FALSE)) +
+  theme(legend.position = "none",
+        strip.text = element_text(face = "bold"),
+        strip.background = element_rect(fill = "lightgray"))
+
+```
+
+## Currency Risk 
+
+A number of the funds in the portfolio are USD denominated - and currency risk needs to be accounted for before we can calculate true returns to us as GBP investors. 
+
+### Total GBP Log Return
+
+When we hold a USD‑denominated fund but measure performance in GBP, the **total log return** is the sum of the local (USD) log return and the FX log return:
+
+$$
+r_{t}^{\text{GBP}}
+\;=\;
+\underbrace{\ln\!\Bigl(\tfrac{P_{t}^{\text{USD}}}{P_{t-1}^{\text{USD}}}\Bigr)}_{r_{t}^{\text{USD}}}
+\;+\;
+\underbrace{\ln\!\Bigl(\tfrac{S_{t}}{S_{t-1}}\Bigr)}_{r_{t}^{\text{FX}}},
+$$
+
+where:
+
+- \(P_{t}^{\text{USD}}\) is the fund price in USD at time \(t\),
+
+- \(S_t\) is the GBP‑per‑USD spot rate at time \(t\).
+
+### Implications for Risk and Return
+
+As a UK investor holding a USD‑quoted fund, our sterling‑returns consist of both the fund’s performance in US dollars and the FX move between USD and GBP. If the dollar strengthens versus the pound, our GBP returns get a boost (and vice versa).
+
+## Proxy for Future of Defence Fund
+
+We use the Invesco Aerospace and Defence ETF. Comparing a USD fund to a GBP fund means that currency risk needs to be taken account of before correlation analysis. The correlation analysis shows that PPA is very much an imperfect proxy for NATP, but it'll give us an ok idea. 
+
+```{r message = FALSE}
+# 1. Download the two price series
+getSymbols(c("PPA", "NATP.L"))
+# rm(list = ls())
+# 1b. Adjust for currency difference of PPA 
+getSymbols("GBPUSD=X") # Download exchange rate
+fx_gbp_per_usd <- 1/Ad(`GBPUSD=X`) # create new xts object for conversions
+colnames(fx_gbp_per_usd) <- ("gbpusd")
+
+# merge data 
+PPA_GBP = merge(Ad(PPA), fx_gbp_per_usd, join = "left")
+
+# fill any days where FX is missing by carrying the last available rate forward
+PPA_GBP$gbpusd <- na.locf(PPA_GBP$gbpusd)
+
+# 4. Compute your fund price in GBP
+ppa_gbp <- PPA_GBP$PPA.Adjusted * PPA_GBP$gbpusd
+colnames(ppa_gbp) <- "ppa_gbp"
+
+# Now price_gbp is your USD‐fund prices translated into GBP on every fund date.
+
+
+# 2. Extract Adjusted Close and merge into one xts object
+proxy_data <- merge(
+  ppa_gbp,
+  Ad(NATP.L)
+)
+
+# Assign the names to the two funds
+colnames(proxy_data) <- c("PPA_GBP", "NATP.L")
+
+# 3. Compute daily log returns, and drop any leading NAs
+log_ret_proxy <- na.omit(diff(log(proxy_data)))
+# head(log_ret_proxy)
+
+# 4. Correlation matrix of the two series
+corr_matrix_proxy <- cor(log_ret_proxy)
+
+# 5. Small correlation plot
+corrplot(
+  corr_matrix_proxy,
+  method     = "number",   # show the correlation coefficient
+  type       = "lower",    # only lower triangle
+  tl.cex     = 0.8,        # label size
+  number.cex = 1.2,        # coefficient size
+  diag       = TRUE       # hide diagonal
+)
+
+```
+
+## Monthly and Annual Returns of Each Fund
+
+### Adjust returns of USD funds so that they are represented in GBP terms
+
+This shows that there is a reasonable level of diversification in the fund, with our emerging market exposures, commodities and gold doing the heavy lifting in terms of providing significant diversification benefits. 
+
+```{r message = FALSE}
+
+# 1. Download the data series
+ticker_names <- c("Physical Gold", "Core MSCI World", "MSCI World Value Factor", "MSCI World Minimum Volatility",
+                  "MSCI Emerging Markets ex China", "Aerospace & Defence", "Bloomberg Commodity", "GBPUSD")
+tickers <- c("SGLN.L", "IWDG.L", "IWVL.L", "MVOL.L", "EMXC", "PPA", "CMOP.L", "GBPUSD=X")
+getSymbols(tickers)
+
+# 2. Extract adjusted closes
+gold_USD        <- Ad(SGLN.L)
+mci_world     <- Ad(IWDG.L)
+world_value_USD    <- Ad(IWVL.L)
+min_vol_USD      <- Ad(MVOL.L)
+em_mkts_USD   <- Ad(EMXC)
+defence_USD   <- Ad(PPA)
+commodities    <- Ad(CMOP.L)
+fx_usd_per_gbp <- Ad(`GBPUSD=X`)        # USD per 1 GBP
+
+# 3. Convert to GBP per USD, since USD funds are quoted in USD
+fx_gbp_per_usd <- 1 / fx_usd_per_gbp
+
+# all the names of the funds 
+ad_prices <- c("gold_USD", "mci_world", "world_value_USD", "min_vol_USD",
+               "em_mkts_USD", "defence_USD", "commodities", "fx_gbp_per_usd")
+
+# put into a list
+ad_prices_list <- mget(ad_prices)
+
+# Take the last price of each month, ignoring NAs
+monthly_list <- lapply(ad_prices_list, function(x) {
+  apply.monthly(na.omit(x), last)
+})
+
+# head(monthly_list$gold_USD)
+
+# helper to shift an xts index to the calendar month end
+set_to_month_end <- function(x) {
+  # x is an xts with one obs per month on last trading day
+  new_idx <- as.Date(as.yearmon(index(x)), frac = 1)
+  index(x) <- new_idx
+  x
+}
+
+# apply to each series in your list
+monthly_calendar_list <- lapply(monthly_list, set_to_month_end)
+
+# head(monthly_calendar_list$gold_USD)
+
+# merge all prices into a single xts object
+merged_ad_prices <- do.call(merge, monthly_calendar_list)
+
+# tail(merged_ad_prices)
+
+# calculate log returns, at the moment in different currencies
+unadjusted_log_returns <- diff(log(merged_ad_prices))
+
+# tail(unadjusted_log_returns)
+
+# set column names
+colnames(unadjusted_log_returns) <- ad_prices
+
+# select the names of the columns you want to adjust to gbp returns
+to_adj <- c("gold_USD", "world_value_USD", "min_vol_USD", "em_mkts_USD", "defence_USD")
+
+# create a new xts object to manipulate 
+gbp_log_returns <- unadjusted_log_returns
+
+# drop=TRUE pulls out a plain vector of length N
+fx_vec <- gbp_log_returns[, "fx_gbp_per_usd", drop = TRUE]  
+
+# now fx_vec is length N, so R will add it to each of the k columns:
+gbp_log_returns[, to_adj] <- gbp_log_returns[, to_adj] + fx_vec
+
+# set new column names 
+colnames(gbp_log_returns) <- ad_prices <- c("gold_gbp", "mci_world", "world_value_gbp", "min_vol_gbp",
+               "em_mkts_gbp", "defence_gbp", "commodities", "fx_gbp_per_usd")
+
+# tail(gbp_log_returns)
+# tail(unadjusted_log_returns)
+
+# 1. Drop the FX column (either by position or name)
+rets2 <- gbp_log_returns[, colnames(gbp_log_returns) != "fx_gbp_per_usd"]
+
+# 2. Restrict to the overlapping period (i.e. only months with no NA across any series)
+rets_common <- na.omit(rets2)
+
+# 3. Plot the correlation matrix with chart.Correlation
+chart.Correlation(
+  rets_common,
+  histogram   = TRUE,    # show distributions on the diagonal
+  pch         = 19,      # solid circles for the scatterplots
+  main        = "Correlation of Monthly GBP Log‑Returns"
+)
+
+# rm("gold_USD", "mci_world", "world_value_USD", "min_vol_USD",
+#                "em_mkts_USD", "defence_USD", "commodities", "fx_gbp_per_usd")
+
+# [1] "ret_a" "ret_b" "ret_c"
+
+```
+
+## Volatility of Each Fund
+
+This chart shows the 12 month rolling standard deviations of the log returns of each individual fund component. 
+
+```{r }
+
+# 1. Compute 12‑month rolling SD for all columns at once
+rolling_sd <- rollapply(
+  data      = rets_common,
+  width     = 12,
+  FUN       = function(x) apply(x, 2, sd),  # on each 12×k block, compute sd of each column
+  by.column = FALSE,                        # FUN expects the full matrix
+  align     = "right",
+  fill      = NA
+)
+
+# 2. (Optional) name the columns if they got lost
+colnames(rolling_sd) <- colnames(rets_common)
+rolling_sd %<>% na.omit()
+
+# 3. Plot all on one chart
+chart.TimeSeries(
+  rolling_sd,
+  main       = "12 Month Rolling Volatility",
+  ylab       = "Std Dev of Monthly Returns",
+  legend.loc = "topright",
+  lwd        = 2
+)
+
+
+```
+
+## Other Characteristics of Each Fund
+
+### VaR and ES
+
+### Skewness and Kurtosis
+
+# Portfolio Returns
+
+This section examines the performance of the portfolio overall. 
+
+## Against S&P 500
+
+```{r }
+
+# 1. Get S&P 500 and compute monthly log‐returns
+getSymbols("^GSPC", src="yahoo", auto.assign = TRUE)
+spx_monthly <- to.monthly(Ad(GSPC), indexAt = "lastof", OHLC = FALSE) # Understand why this gives the last calendar day of month
+
+# Set the S&P 500 in GBP terms
+fx_gbp_per_usd <- 1/Ad(`GBPUSD=X`) # create new xts object for conversions
+fx_gbp_per_usd <- to.monthly(fx_gbp_per_usd, indexAt = "lastof", OHLC = FALSE)
+
+colnames(fx_gbp_per_usd) <- ("gbpusd")
+
+# merge data 
+spx_gbp = merge(spx_monthly, fx_gbp_per_usd, join = "left")
+
+# fill any days where FX is missing by carrying the last available rate forward
+spx_gbp$gbpusd <- na.locf(spx_gbp$gbpusd)
+colnames(spx_gbp)
+
+# 4. Compute your index price in GBP
+spx_monthly <- spx_gbp$GSPC.Adjusted * spx_gbp$gbpusd
+
+spx_log     <- na.omit(diff(log(spx_monthly)))
+colnames(spx_log) <- "SP500"
+
+# 2. Align SPX to your fund series (rets_common)
+# common_idx     <- intersect(index(rets_common), index(spx_log))
+# rets_common    <- rets_common[common_idx, ]
+spx_log        <- spx_log[index(rets_common)]
+
+# 3. Convert log‐returns → simple returns
+rets_simple <- exp(rets_common) - 1
+spx_simple  <- exp(spx_log)     - 1
+
+
+
+# 4. Quarterly‐rebalanced portfolio simple returns
+weights   <- c(0.15, 0.40, 0.10, 0.10, 0.05, 0.10, 0.10)
+pf_simple <- Return.portfolio(
+  R             = rets_simple,
+  weights       = weights,
+  rebalance_on  = "quarters",
+  geometric     = TRUE
+)
+
+# (Optional) if you really need log portfolio returns:
+# pf_log <- log(1 + pf_simple)
+
+# 5. Build cumulative return indices (growth of 1)
+pf_cum   <- cumprod(1 + pf_simple)
+spx_cum  <- cumprod(1 + spx_simple)
+comp_cum <- cumprod(1 + rets_simple)
+
+# 6a. Plot: Portfolio vs. S&P 500
+chart.TimeSeries(
+  cbind(Portfolio = pf_cum, SP500 = spx_cum),
+  legend.loc = "topleft",
+  main       = "Cumulative Returns: Portfolio vs S&P 500",
+  ylab       = "Growth of £1",
+  lwd        = 2
+)
+```
+
+## Against Portfolio Components
+
+```{r }
+# 6b. Plot: Portfolio vs. Components
+chart.TimeSeries(
+  cbind(Portfolio = pf_cum, comp_cum),
+  legend.loc = "topleft",
+  main       = "Cumulative Returns: Portfolio vs. Components",
+  ylab       = "Growth of £1",
+  lwd        = 2
+)
+
+```
+
+## Standard deviation comparisons
+
+### Against S&P 500
+
+```{r }
+
+# install.packages(c("quantmod","PerformanceAnalytics"))  # if needed
+
+# 1. Re‑compute SPX simple returns
+# getSymbols("^GSPC", src = "yahoo", auto.assign = TRUE)
+# spx_monthly <- to.monthly(Ad(GSPC), indexAt = "lastof", OHLC = FALSE)
+# spx_log     <- na.omit(diff(log(spx_monthly)))
+# spx_simple  <- exp(spx_log) - 1
+# colnames(spx_simple) <- "SP500"
+
+# 2. Prepare fund simple returns
+# funds_simple <- exp(rets_common) - 1 # rets simple
+# 
+# # 3. Quarterly‑rebalanced portfolio simple returns
+# weights   <- c(0.15, 0.40, 0.10, 0.10, 0.05, 0.10, 0.10)
+# pf_simple <- Return.portfolio(
+#   R             = funds_simple,
+#   weights       = weights,
+#   rebalance_on  = "quarters",
+#   geometric     = FALSE
+# )
+
+# 4a. Merge PF vs SPX
+vol_spx <- merge(pf = pf_simple, SP500 = spx_simple, join = "inner")
+
+# 4b. 12‑month rolling SD for PF & SPX
+rolling_vol_spx <- rollapply(
+  vol_spx,
+  width     = 12,
+  FUN       = function(x) apply(x, 2, sd),
+  by.column = FALSE,
+  align     = "right",
+  fill      = NA
+)
+rolling_vol_spx %<>% na.omit()
+# 5a. Plot Portfolio vs. S&P 500 rolling vol
+chart.TimeSeries(
+  rolling_vol_spx,
+  main       = "12‑Month Rolling Volatility: Portfolio vs. S&P 500",
+  ylab       = "Rolling SD of Monthly Returns",
+  legend.loc = "topleft",
+  lwd        = 2
+)
+
+```
+
+### Against Portfolio Components
+
+```{r }
+# 4c. Merge PF vs Components
+vol_comp <- merge(pf = pf_simple, rets_simple, join = "inner")
+
+# 4d. 12‑month rolling SD for PF & each fund
+rolling_vol_comp <- rollapply(
+  vol_comp,
+  width     = 12,
+  FUN       = function(x) apply(x, 2, sd),
+  by.column = FALSE,
+  align     = "right",
+  fill      = NA
+)
+
+rolling_vol_comp %<>% na.omit()
+# 5b. Plot Portfolio vs. Components rolling vol
+chart.TimeSeries(
+  rolling_vol_comp,
+  main       = "12‑Month Rolling Volatility: Portfolio vs. Funds",
+  ylab       = "Rolling SD of Monthly Returns",
+  legend.loc = "topleft",
+  lwd        = 2
+)
+
+```
+
+## Plotting annual returns
+
+```{r fig.height = 18, fig.width = 10}
+
+#── 2. combine portfolio + funds ────────────────────────────────────────────────
+all_rets <- cbind(
+  Portfolio = pf_simple,
+  rets_simple
+)
+
+#── 3. annual returns 2018–2024 ─────────────────────────────────────────────────
+ann_rets_xts <- apply.yearly(
+  all_rets,
+  function(x) apply(x, 2, function(col) prod(1 + col) - 1)
+)
+# keep only full years 2018–2024
+ann_rets_xts <- ann_rets_xts["2018/2024"]
+
+# convert to data.frame
+ann_df <- data.frame(
+  Year = as.integer(format(index(ann_rets_xts), "%Y")),
+  coredata(ann_rets_xts),
+  row.names = NULL,
+  check.names = FALSE
+)
+
+#── 4. compute 2025 YTD ─────────────────────────────────────────────────────────
+ytd_vals <- apply(
+  all_rets["2025"],
+  2,
+  function(col) prod(1 + col) - 1
+)
+ytd_df <- data.frame(
+  Year = 2025,
+  t(ytd_vals),
+  row.names = NULL,
+  check.names = FALSE
+)
+
+#── 5. combine full years + YTD ─────────────────────────────────────────────────
+combined_df <- bind_rows(ann_df, ytd_df)
+
+#── 6. reshape for ggplot ───────────────────────────────────────────────────────
+long_df <- combined_df %>%
+  pivot_longer(
+    cols = -Year,
+    names_to  = "Asset",
+    values_to = "Return"
+  )
+
+#── 7. faceted bar chart ─────────────────────────────────────────────────────────
+p <- ggplot(long_df, aes(x = factor(Year), y = Return)) +
+  geom_col(aes(fill = ifelse(Return < 0, "red4", "green4")), width = 0.7) +
+  facet_wrap(~ Asset, scales = "free_y", ncol = 1) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  geom_hline(yintercept = 0, colour = "black", linetype = "dashed") +
+  labs(
+    title = "Annual and YTD Simple Returns: Portfolio & Funds",
+    x     = "Year",
+    y     = "Return"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    strip.text       = element_text(face = "bold"),
+    axis.text.x      = element_text(angle = 45, hjust = 1),
+    panel.grid.major = element_line(color = "grey80"),
+    panel.grid.minor = element_blank(),
+    plot.title       = element_text(face = "bold", hjust = 0.5),
+    legend.position = "none"
+  )
+
+print(p)
+
+```
+
+
+
+```{r }
+
+#── 8. kable table ───────────────────────────────────────────────────────────────
+combined_df %>%
+  mutate(across(-Year, ~ .x * 100)) %>%
+  kable(
+    format  = "html",
+    digits  = 2,
+    caption = "Annual (2018–2024) and 2025 YTD Simple Returns (%) – Portfolio & Funds"
+  ) %>%
+  kable_styling(full_width = FALSE, position = "center")
+
+
+```
+
+## Portfolio Rebalancing Decision
+
+
+
+
+## Cumulative Returns 
+
+[**Include the S&P 500 as a benchmark**]
+
+
+
+
+

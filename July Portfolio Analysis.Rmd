@@ -1,0 +1,120 @@
+
+---
+title: "Portfolio Analysis - Core Fund - April 2025"
+author: "Financial Analysis"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  html_document:
+    theme: cosmo
+    highlight: tango
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                     fig.width = 10, fig.height = 6)
+```
+
+```{r echo = FALSE}
+
+# Load required libraries
+library(quantmod)
+library(PerformanceAnalytics)
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(reshape2)
+library(scales)
+library(gridExtra)
+library(zoo)  # For rolling calculations
+library(magrittr)
+library(xts)
+library(knitr)
+library(kableExtra)
+library(RColorBrewer)
+library(corrplot)
+
+# Set theme for consistent visualization
+theme_set(theme_minimal() + 
+          theme(plot.title = element_text(face = "bold"),
+                plot.subtitle = element_text(face = "italic"),
+                legend.position = "bottom"))
+
+```
+
+# Funds
+
+* Fidelity Index Emerging Markets P Acc
+* Future of Defence ETF Acc GBP
+* Invesco Bloomberg Commodity ETF GBP
+* iShares Core MSCI World ETF GBP H Dist
+* iShares Edge MSCI World Min Vol ETF $ Acc GBP
+* iShares Edge MSCI Wld Val Fctr ETF $ Acc GBP
+* iShares Physical Gold ETC GBP
+
+```{r echo = FALSE}
+rm(list = ls())
+
+## Entry Data
+fund.names <- c("Fidelity Emerging Markets", "Future of Defence", "Invesco Bloomberg Commodity", "MSCI World ETF", 
+                "MSCI Min Vol ETF", "MSCI World Value", "iShares Gold")
+tickers <- c("0P00011YDA.L", "NATO.L", "CMOP.L", "SWDA.L", "WMVG.L", "IWFV.L", "SGLN.L")
+start.amount <- c(549.71, 2369.89, 2004.51, 9077.07, 1976.17, 2153.54, 30002.04)
+currency <- c("usd", "gbp", "gbp", "gbp", "gbp", "gbp", "gbp")
+usd.fund <- "0P00011YDA.L"
+
+```
+
+# Sorting out data
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+start.date <- "2023-08-01"
+
+## Download data from yahoo finance
+getSymbols(tickers, src = "yahoo", from = start.date)
+
+## Download GBPUSD data
+getSymbols("GBPUSD=X", src = "yahoo", from = start.date)
+
+## add in the currency data to tickers
+tickersplus <- c(tickers, "GBPUSD=X")
+
+# daily prices list
+daily.prices <- mget(tickersplus, envir = .GlobalEnv)
+daily.prices %<>% lapply(Ad)
+names(daily.prices) <- c(fund.names, "gbpusd")
+
+## align index dates for gbpusd object
+## na.locf() fills forward from the prior trading day.
+daily.prices$gbpusd <- na.locf(daily.prices$gbpusd[index(daily.prices$`Fidelity Emerging Markets`)])
+
+## currency adjustment
+daily.prices$`Fidelity Emerging Markets` <- daily.prices$`Fidelity Emerging Markets`/daily.prices$gbpusd
+
+## Monthly data - with one entry for the last trading day of each month
+monthly.prices <- lapply(daily.prices, function(x) 
+  apply.monthly(x, FUN = last)
+)
+
+## Align Index Dates
+monthly.prices <- lapply(monthly.prices, function(x) {
+  # convert the existing index to yearmon, then back to Date at frac=1 (month-end)
+  new_idx <- as.Date(as.yearmon(index(x)), frac = 1)
+  index(x) <- new_idx
+  x
+})
+
+## Remove the currency Index
+monthly.prices$gbpusd = NULL
+
+
+```
+
+
+
+
+
+
