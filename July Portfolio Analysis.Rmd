@@ -46,16 +46,65 @@ theme_set(theme_minimal() +
 
 # Funds
 
-* Fidelity Index Emerging Markets P Acc
-* Future of Defence ETF Acc GBP
-* Invesco Bloomberg Commodity ETF GBP
-* iShares Core MSCI World ETF GBP H Dist
-* iShares Edge MSCI World Min Vol ETF $ Acc GBP
-* iShares Edge MSCI Wld Val Fctr ETF $ Acc GBP
-* iShares Physical Gold ETC GBP
+```{r echo = FALSE, message = FALSE}
+
+# ETF Portfolio Descriptions
+# R code for presenting ETF information in R Markdown
+
+# Create dataframe with ETF descriptions
+etf_descriptions <- data.frame(
+  ETF = c(
+    "Fidelity Index Emerging Markets P Acc",
+    "Future of Defence ETF Acc GBP", 
+    "Invesco Bloomberg Commodity ETF GBP",
+    "iShares Core MSCI World ETF GBP H Dist",
+    "iShares Edge MSCI World Min Vol ETF $ Acc GBP",
+    "iShares Edge MSCI Wld Val Fctr ETF $ Acc GBP",
+    "iShares Physical Gold ETC GBP"
+  ),
+  
+  Description = c(
+    "Tracks the MSCI Emerging Markets Index, providing broad exposure to large and mid-cap stocks across emerging market economies including China, India, Taiwan, and South Korea. The fund invests in companies across various sectors such as technology, financials, and consumer discretionary in developing nations. Offers diversified access to growth opportunities in emerging economies through a passive indexing approach.",
+    
+    "Invests in companies involved in defence and cyber defence spending across NATO and NATO+ allied countries, capitalizing on increased military expenditure globally. Holdings include major defence contractors like Palantir Technologies, Rheinmetall, and RTX Corporation focusing on military technology and equipment. The fund benefits from geopolitical tensions driving higher defence budgets and modernization programs across Western nations.",
+    
+    "Provides exposure to a broad basket of commodity futures including energy (crude oil, natural gas), precious metals (gold, silver), industrial metals (copper, aluminum), and agricultural products. The fund tracks the Bloomberg Commodity Index, offering diversified commodity exposure without direct physical ownership of the underlying assets. Serves as an inflation hedge and portfolio diversifier, particularly during periods of rising commodity prices and economic uncertainty.",
+    
+    "Tracks the MSCI World Index, investing in large and mid-cap developed market equities across 23 countries including the US, Japan, UK, and continental Europe. The fund provides broad exposure to global developed market companies across all sectors, with significant weightings in technology, financials, and healthcare. Offers GBP-hedged exposure to reduce currency risk for UK investors while maintaining global equity market diversification.",
+    
+    "Follows a minimum volatility strategy within the MSCI World Index, selecting stocks with lower historical volatility to reduce portfolio risk while maintaining developed market exposure. The fund tilts toward defensive sectors like utilities, consumer staples, and healthcare while underweighting more volatile growth sectors. Aims to provide smoother returns than the broader market while still capturing long-term equity growth potential.",
+    
+    "Implements a value investment strategy by selecting stocks from the MSCI World Index that exhibit value characteristics such as low price-to-book and price-to-earnings ratios. The fund focuses on companies that appear undervalued relative to their fundamentals, including mature companies in sectors like financials, energy, and industrials. Provides exposure to the value factor premium while maintaining global developed market diversification.",
+    
+    "Holds physical gold bullion stored in secure vaults, providing direct exposure to gold price movements without the complexities of futures contracts or mining stocks. The fund offers a way to invest in gold as a portfolio hedge against inflation, currency devaluation, and economic uncertainty. Each share represents a fractional ownership of actual gold, making it a pure play on precious metals investing."
+  ),
+  
+  stringsAsFactors = FALSE
+)
+
+# Function to create a nicely formatted table
+create_etf_table <- function(data) {
+  data %>%
+    kable(col.names = c("Exchange-Traded Fund", "Investment Description"),
+          caption = "Portfolio ETF Holdings and Investment Focus") %>%
+    kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+                  full_width = FALSE,
+                  position = "center") %>%
+    column_spec(1, bold = TRUE, width = "25%") %>%
+    column_spec(2, width = "75%") %>%
+    row_spec(0, bold = TRUE, background = "#f7f7f7")
+}
+
+# Create the formatted table
+etf_table <- create_etf_table(etf_descriptions)
+
+# Display the table
+etf_table
+
+```
 
 ```{r echo = FALSE}
-rm(list = ls())
+# rm(list = ls())
 
 ## Entry Data
 fund.names <- c("Fidelity Emerging Markets", "Future of Defence", "Invesco Bloomberg Commodity", "MSCI World ETF", 
@@ -65,13 +114,10 @@ amount.A <- c(549.71, 2369.89, 2004.51, 9077.07, 1976.17, 2153.54, 3002.04)
 amount.B <- c(0, 2010.41, 0, 6063.66, 0, 0, 4160.68)
 combined.amounts <- amount.A + amount.B
 currency <- c("usd", "gbp", "gbp", "gbp", "gbp", "gbp", "gbp")
-usd.fund <- "0P00011YDA.L"
 
 ```
 
 # Data Preparation
-
-
 
 ```{r echo = FALSE, warning = FALSE, message = FALSE, include = FALSE}
 
@@ -121,27 +167,74 @@ monthly.prices$gbpusd = NULL
 ```{r echo = FALSE}
 
 # 1) Compute monthly log‐returns for each series
-ret_list <- lapply(monthly.prices, function(x) {
+monthly.returns <- lapply(monthly.prices, function(x) {
   # diff(log(x)) gives log returns; drop the first NA row
   re <- diff(log(x))
   na.omit(re)
 })
 
 # 2) Merge them into one xts object
-all.rets <- do.call(merge, ret_list)
-colnames(all.rets) <- names(ret_list)
+all.rets <- do.call(merge, monthly.returns)
+colnames(all.rets) <- names(monthly.returns)
 
-# 3) Correlation matrix (pairwise complete cases)
-cor_mat <- cor(all.rets, use = "pairwise.complete.obs")
 
-corrplot(cor_mat,
+```
+
+```{r echo = FALSE, warning = FALSE, message = FALSE}
+
+# Set up the plotting area for side-by-side plots
+# Adjust figure size for wide presentation
+# par(mfrow = c(1, 2), mar = c(4, 4, 3, 2))
+
+# Left plot: All available data correlation matrix
+cor_mat_all <- cor(all.rets, use = "pairwise.complete.obs")
+
+corrplot(cor_mat_all,
          method = "color",        # colored squares
          type   = "upper",        # only show upper triangle
          addCoef.col = "black",   # add correlation coefficients
          tl.col = "darkblue",     # variable names in dark blue
          tl.srt = 45,             # rotate labels for readability
-         diag = FALSE             # hide diagonal
+         diag = FALSE,            # hide diagonal
+         title = "Correlations Since August 2023",      # add title
+         mar = c(0, 0, 1, 0)      # adjust margins
 )
+
+# Right plot: 2025 data only correlation matrix
+# Filter data for 2025 only
+all.rets_2025 <- all.rets["2025/"]
+
+# Create correlation matrix for 2025 data
+cor_mat_2025 <- cor(all.rets_2025, use = "pairwise.complete.obs")
+
+corrplot(cor_mat_2025,
+         method = "color",        # colored squares
+         type   = "upper",        # only show upper triangle
+         addCoef.col = "black",   # add correlation coefficients
+         tl.col = "darkblue",     # variable names in dark blue
+         tl.srt = 45,             # rotate labels for readability
+         diag = FALSE,            # hide diagonal
+         title = "2025 Correlations",     # add title
+         mar = c(0, 0, 1, 0)      # adjust margins
+)
+
+# Reset plotting parameters
+# par(mfrow = c(1, 1))
+
+```
+
+```{r }
+# 3) Correlation matrix (pairwise complete cases)
+# cor_mat <- cor(all.rets, use = "pairwise.complete.obs")
+# 
+# corrplot(cor_mat,
+#          method = "color",        # colored squares
+#          type   = "upper",        # only show upper triangle
+#          addCoef.col = "black",   # add correlation coefficients
+#          tl.col = "darkblue",     # variable names in dark blue
+#          tl.srt = 45,             # rotate labels for readability
+#          diag = FALSE             # hide diagonal
+# )
 
 ```
 
@@ -149,25 +242,38 @@ corrplot(cor_mat,
 
 ```{r echo = FALSE}
 
-df <- data.frame(
+# Create accounts dataframe
+accounts <- data.frame(
   fund   = fund.names,
   amount = combined.amounts,
   stringsAsFactors = FALSE
 )
 
-# 2) compute percentages and label positions
-df <- df %>%
+# Compute percentages and label positions (already ordered by desc(amount))
+accounts %<>%
   arrange(desc(amount)) %>%
   mutate(
     pct  = amount / sum(amount) * 100,
     lbl  = sprintf("%s\n%.1f%%", fund, pct),
-    ypos = cumsum(pct) - 0.5 * pct
+    # Calculate proper position for labels in pie chart (using cumulative pct)
+    ypos = cumsum(pct) - 0.5 * pct,
+    # Create percentage labels for wedges (0 decimal places)
+    pct_label = paste0(round(pct, 0), "%")
   )
 
-# 3) make the pie chart with ggplot2
-ggplot(df, aes(x = "", y = pct, fill = fund)) +
+# Reorder the fund factor levels to match the arranged order
+accounts$fund <- factor(accounts$fund, levels = accounts$fund)
+
+# Create the pie chart with ggplot2
+ggplot(accounts, aes(x = "", y = pct, fill = fund)) +
   geom_col(width = 1, color = "white") +           # white borders between slices
-  coord_polar(theta = "y") +                       # convert bar to pie# labels in the middle of slices
+  coord_polar(theta = "y") +                       # convert bar to pie
+  # Add percentage labels on the wedges
+  geom_text(aes(label = pct_label), 
+            position = position_stack(vjust = 0.5),
+            color = "white", 
+            fontface = "bold", 
+            size = 4) +
   theme_void() +                                    # remove axes, grid, background
   labs(title = "Current Portfolio Composition",
        fill  = "Fund") +
